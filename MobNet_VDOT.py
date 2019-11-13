@@ -57,7 +57,7 @@ print(trainset.class_to_idx)
 idx_to_class = {j:i for i,j in trainset.class_to_idx.items()}
 
 testset = torchvision.datasets.ImageFolder(root='./12-retrain/clean-dataset/validation',  transform=transform_test)
-testloader = torch.utils.data.DataLoader(testset, batch_size=10, shuffle=False, num_workers=2)
+testloader = torch.utils.data.DataLoader(testset, batch_size=20, shuffle=False, num_workers=2)
 
 classes = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']
 
@@ -94,7 +94,7 @@ class Block(nn.Module):
 class MobileNetV2(nn.Module):
     # (expansion, out_planes, num_blocks, stride)
     cfg = [(1,  16, 1, 1),
-           (6,  24, 2, 1),  # NOTE: change stride 2 -> 1 for CIFAR10
+           (6,  24, 2, 2),  # NOTE: change stride 2 -> 1 for CIFAR10
            (6,  32, 3, 2),
            (6,  64, 4, 2),
            (6,  96, 3, 1),
@@ -103,18 +103,20 @@ class MobileNetV2(nn.Module):
 
     def __init__(self, num_classes=12):
         super(MobileNetV2, self).__init__()
-        # NOTE: change conv1 stride 2 -> 1 for CIFAR10
+       
         self.conv1 = nn.Conv2d(3, 32, kernel_size=3, stride=2, padding=1, bias=False)
 	#print(LAYERS)
         self.bn1 = nn.BatchNorm2d(32)
         self.layers = self._make_layers(in_planes=32)
         self.conv2 = nn.Conv2d(320, 1280, kernel_size=1, stride=1, padding=0, bias=False)
+        
         self.bn2 = nn.BatchNorm2d(1280)
 	#According to Sadegh, he took last layer as flattened and added a 512 layer and then fed it to softmax
 	#self.conv3 = nn.Conv2d(1280, 512, kernel_size=1, stride=1, padding=0, bias=False)
 	#self.bn3 = nn.BatchNorm2d(512)
 	#self.linear = nn.Linear(512, num_classes)
-        self.linear = nn.Linear(1280, num_classes)
+	#add pooling, if not flatten the last output
+        self.linear = nn.Linear(512, num_classes)
 
     def _make_layers(self, in_planes):
         layers = []
@@ -127,13 +129,16 @@ class MobileNetV2(nn.Module):
 
     def forward(self, x):
         out = F.relu(self.bn1(self.conv1(x)))
-        out = self.layers(out)
+        out=self.layers(out)
+        #out = self.conv2(out)
         out = F.relu(self.bn2(self.conv2(out)))
         # NOTE: change pooling kernel_size 7 -> 4 for CIFAR10
 	#out = nn.Conv2d(in_planes, 512, )
-        out = F.avg_pool2d(out, 4)
+        out = F.avg_pool2d(out, 7)
+	out = self.linear(out)
         out = out.view(out.size(0), -1)
-        out = self.linear(out)
+        print(out.shape)
+        #out = self.linear(out)
         return out
 
 
